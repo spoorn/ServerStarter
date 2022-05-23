@@ -1,6 +1,7 @@
 package atm.bloodworkxgaming.serverstarter.packtype.curse
 
 import atm.bloodworkxgaming.serverstarter.InternetManager
+import atm.bloodworkxgaming.serverstarter.ServerStarter
 import atm.bloodworkxgaming.serverstarter.ServerStarter.Companion.LOGGER
 import atm.bloodworkxgaming.serverstarter.config.ConfigFile
 import atm.bloodworkxgaming.serverstarter.packtype.AbstractZipbasedPackType
@@ -19,11 +20,14 @@ import java.nio.file.Paths
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.logging.Logger
 import java.util.regex.Pattern
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
+import kotlin.system.exitProcess
 
-open class CursePackType(private val configFile: ConfigFile, internetManager: InternetManager) : AbstractZipbasedPackType(configFile, internetManager) {
+open class CursePackType(private val configFile: ConfigFile, internetManager: InternetManager) :
+    AbstractZipbasedPackType(configFile, internetManager) {
     private var forgeVersion: String = configFile.install.loaderVersion
     private var mcVersion: String = configFile.install.mcVersion
     private val oldFiles = File(basePath + "OLD_TO_DELETE/")
@@ -147,9 +151,12 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
             // gets all the mods
             for (jsonElement in json.getAsJsonArray("files")) {
                 val obj = jsonElement.asJsonObject
-                mods.add(ModEntryRaw(
+                mods.add(
+                    ModEntryRaw(
                         obj.getAsJsonPrimitive("projectID").asString,
-                        obj.getAsJsonPrimitive("fileID").asString))
+                        obj.getAsJsonPrimitive("fileID").asString
+                    )
+                )
             }
         }
 
@@ -178,7 +185,12 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
 
         val urls = ConcurrentLinkedQueue<String>()
 
-        LOGGER.info("Requesting Download links from cursemeta.")
+        LOGGER.info("Requesting Download links from CFCore API.")
+
+        if (configFile.install.curseForgeAPIKey.isEmpty()) {
+            LOGGER.error("No API Key provided. Please create a CFCore account (https://console.curseforge.com) and place your generated API key in the server-setup-config.yaml file. Alternatively, use the token extractor to extract the API key from an official CurseForge client (https://git.sakamoto.pl/domi/curseme/-/blob/meow/getToken.sh)")
+            exitProcess(1)
+        }
 
         mods.parallelStream().forEach { mod ->
             if (ignoreSet.isNotEmpty() && ignoreSet.contains(mod.projectID)) {
@@ -186,16 +198,19 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
                 return@forEach
             }
 
-            val url = (configFile.install.getFormatSpecificSettingOrDefault("cursemeta", "https://cursemeta.dries007.net")
-                    + "/" + mod.projectID + "/" + mod.fileID + ".json")
+            //old code using cursemeta servers, removed fallback and made hardcoded bc the api calls are incompatable
+//            val url = (configFile.install.getFormatSpecificSettingOrDefault("cursemeta", "https://cursemeta.dries007.net")
+//                    + "/" + mod.projectID + "/" + mod.fileID + ".json")//
+            val url = "https://api.curseforge.com/v1/mods/" + mod.projectID + "/files/" + mod.fileID + "/download-url"
             LOGGER.info("Download url is: $url", true)
 
             try {
                 val request = Request.Builder()
-                        .url(url)
-                        .header("User-Agent", "All the mods server installer.")
-                        .header("Content-Type", "application/json")
-                        .build()
+                    .url(url)
+                    .header("User-Agent", "All the mods server installer.")
+                    .header("Content-Type", "application/json")
+                    .header("x-api-key", configFile.install.curseForgeAPIKey)
+                    .build()
 
                 val res = internetManager.httpClient.newCall(request).execute()
 
@@ -206,11 +221,19 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
                 val jsonRes = JsonParser().parse(body.string()).asJsonObject
                 LOGGER.info("Response from manifest query: $jsonRes", true)
 
-                urls.add(jsonRes
-                        .asJsonObject
-                        .getAsJsonPrimitive("DownloadURL").asString)
+                if (!jsonRes.asJsonObject.get("data").isJsonNull) {
+                    urls.add(
+//                    jsonRes
+//                        .asJsonObject
+//                        .getAsJsonPrimitive("DownloadURL").asString
+                        jsonRes.asJsonObject.getAsJsonPrimitive("data").asString
+
+                    )
+                } else {
+                    LOGGER.error("Mod failed to produce download URL - ProjectID: " + mod.projectID + ", FileID: " + mod.fileID)
+                }
             } catch (e: IOException) {
-                LOGGER.error("Error while trying to get URL from cursemeta for mod $mod", e)
+                LOGGER.error("Error while trying to get URL from CFCore for mod $mod", e)
             }
         }
 
@@ -262,7 +285,13 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
      * @param fallbackList   List to write to when it failed
      * @param ignorePatterns Patterns of mods which should be ignored
      */
-    private fun processSingleMod(mod: String, counter: AtomicInteger, totalCount: Int, fallbackList: MutableList<String>, ignorePatterns: List<Pattern>) {
+    private fun processSingleMod(
+        mod: String,
+        counter: AtomicInteger,
+        totalCount: Int,
+        fallbackList: MutableList<String>,
+        ignorePatterns: List<Pattern>
+    ) {
         try {
             val modName = FilenameUtils.getName(mod)
             for (ignorePattern in ignorePatterns) {
@@ -272,7 +301,12 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
             }
 
             internetManager.downloadToFile(mod, File(basePath + "mods/" + modName))
-            LOGGER.info("[" + String.format("% 3d", counter.incrementAndGet()) + "/" + totalCount + "] Downloaded mod: " + modName)
+            LOGGER.info(
+                "[" + String.format(
+                    "% 3d",
+                    counter.incrementAndGet()
+                ) + "/" + totalCount + "] Downloaded mod: " + modName
+            )
 
         } catch (e: IOException) {
             LOGGER.error("Failed to download mod", e)

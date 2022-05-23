@@ -61,6 +61,7 @@ data class InstallConfig(
 
     var modpackUrl: String = "",
     var modpackFormat: String = "",
+    var curseForgeAPIKey: String = "",
     var formatSpecific: Map<String, Any> = Collections.emptyMap(),
 
     var baseInstallPath: String = "",
