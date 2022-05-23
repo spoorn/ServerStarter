@@ -188,7 +188,7 @@ open class CursePackType(private val configFile: ConfigFile, internetManager: In
         LOGGER.info("Requesting Download links from CFCore API.")
 
         if (configFile.install.curseForgeAPIKey.isEmpty()) {
-            LOGGER.error("No API Key provided. Please create a CFCore account (https://console.curseforge.com) and place your generated API key in the server-setup-config.yaml file. Alternatively, use the token extractor to extract the API key from an official CurseForge client (https://git.sakamoto.pl/domi/curseme/-/blob/meow/getToken.sh)")
+            LOGGER.error("No API Key provided. Please see https://github.com/Ocraftyone/ServerStarter-CFCorePatch for details on how to obtain a key")
             exitProcess(1)
         }
 
