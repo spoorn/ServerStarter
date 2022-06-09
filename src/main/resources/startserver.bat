@@ -8,7 +8,7 @@ COLOR 3F >nul 2>&1
 SET MC_SYS32=%SYSTEMROOT%\SYSTEM32
 REM Make batch directory the same as the directory it's being called from
 REM For example, if "run as admin" the batch starting dir could be system32
-CD "%~dp0" >nul 2>&1
+cd /D "%~dp0"
 
 
 :CHECKJAVA
