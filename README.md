@@ -19,6 +19,8 @@ But it allows for more:
 ## Format
 See `server-setup-config.yaml` for a example file how this file should be layouted.
 
+# Below section is pulled from a patch fork https://github.com/BloodyMods/ServerStarter/issues/67
+
 ## How is this fork different than the original?
 This fork has been modified to use the official CurseForge API. This has become necesarry due to the recent shutdown of the cursemeta API (a third-pary CurseForge API). With this change, an API key is needed. There are two ways to get an API key which are layed out below.
 
